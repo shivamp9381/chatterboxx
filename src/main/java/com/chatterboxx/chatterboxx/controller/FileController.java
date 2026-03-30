@@ -23,6 +23,6 @@ public class FileController {
 
         String url = "http://localhost:8080/uploads/" + fileName;
 
-        return ResponseEntity.ok(url);
+        return ResponseEntity.ok().body(url);
     }
 }
