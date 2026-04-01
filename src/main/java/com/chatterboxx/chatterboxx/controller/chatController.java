@@ -23,54 +23,38 @@
 //    @Autowired
 //    private MessageRepo messageRepo;
 //
-//    // 🔥 Track online users per room (in-memory)
 //    private static final ConcurrentHashMap<String, Set<String>> roomUsers = new ConcurrentHashMap<>();
 //
-//
-//    // ✅ SEND MESSAGE (MongoDB optimized)
+//    // ✅ SEND MESSAGE
 //    @MessageMapping("/sendMessage/{roomId}")
 //    @SendTo("/topic/room/{roomId}")
 //    public message sendMessage(
 //            @DestinationVariable String roomId,
 //            @Payload MessageRequest request
 //    ) {
-//
-//        // 🔍 Optional safety check
-//        room room = roomRepo.findByRoomId(roomId);
-//        if (room == null) {
-//            throw new RuntimeException("Room not found: " + roomId);
-//        }
-//
-//        // ✅ Create message
 //        message msg = new message();
 //        msg.setRoomId(roomId);
 //        msg.setContent(request.getContent());
 //        msg.setSender(request.getSender());
 //        msg.setTimestamp(LocalDateTime.now());
+//        msg.setSeen(false); // 🔥
 //
-//        // ✅ Save to MongoDB
 //        return messageRepo.save(msg);
 //    }
 //
-//
-//    // 🔥 TYPING INDICATOR
+//    // 🔥 TYPING
 //    @MessageMapping("/typing/{roomId}")
 //    @SendTo("/topic/typing/{roomId}")
-//    public String typing(
-//            @DestinationVariable String roomId,
-//            @Payload String username
-//    ) {
+//    public String typing(@DestinationVariable String roomId,
+//                         @Payload String username) {
 //        return username;
 //    }
 //
-//
-//    // 🔥 USER JOIN (Online users)
+//    // 🔥 USERS JOIN
 //    @MessageMapping("/join/{roomId}")
 //    @SendTo("/topic/users/{roomId}")
-//    public Set<String> join(
-//            @DestinationVariable String roomId,
-//            @Payload String username
-//    ) {
+//    public Set<String> join(@DestinationVariable String roomId,
+//                            @Payload String username) {
 //
 //        roomUsers.putIfAbsent(roomId, new HashSet<>());
 //        roomUsers.get(roomId).add(username);
@@ -78,14 +62,11 @@
 //        return roomUsers.get(roomId);
 //    }
 //
-//
-//    // 🔥 USER LEAVE (important for logout / tab close)
+//    // 🔥 USERS LEAVE
 //    @MessageMapping("/leave/{roomId}")
 //    @SendTo("/topic/users/{roomId}")
-//    public Set<String> leave(
-//            @DestinationVariable String roomId,
-//            @Payload String username
-//    ) {
+//    public Set<String> leave(@DestinationVariable String roomId,
+//                             @Payload String username) {
 //
 //        if (roomUsers.containsKey(roomId)) {
 //            roomUsers.get(roomId).remove(username);
@@ -93,14 +74,39 @@
 //
 //        return roomUsers.getOrDefault(roomId, new HashSet<>());
 //    }
+//
+//    // 🔥 READ RECEIPT
+//    @MessageMapping("/seen/{roomId}")
+//    @SendTo("/topic/seen/{roomId}")
+//    public String markSeen(@DestinationVariable String roomId,
+//                           @Payload String messageId) {
+//
+//        Optional<message> msg = messageRepo.findById(messageId);
+//
+//        if (msg.isPresent()) {
+//            msg.get().setSeen(true);
+//            messageRepo.save(msg.get());
+//        }
+//
+//        return messageId;
+//    }
+//
+//    // 🔥 PRIVATE MESSAGE
+//    @MessageMapping("/private")
+//    @SendTo("/topic/private")
+//    public message privateMessage(@Payload message msg) {
+//        msg.setTimestamp(LocalDateTime.now());
+//        msg.setSeen(false);
+//        return messageRepo.save(msg);
+//    }
 //}
 
 
 package com.chatterboxx.chatterboxx.controller;
 
 import com.chatterboxx.chatterboxx.entities.message;
-import com.chatterboxx.chatterboxx.entities.room;
 import com.chatterboxx.chatterboxx.payload.MessageRequest;
+import com.chatterboxx.chatterboxx.payload.ReactionRequest;
 import com.chatterboxx.chatterboxx.repositories.MessageRepo;
 import com.chatterboxx.chatterboxx.repositories.roomRepo;
 
@@ -135,12 +141,12 @@ public class chatController {
         msg.setContent(request.getContent());
         msg.setSender(request.getSender());
         msg.setTimestamp(LocalDateTime.now());
-        msg.setSeen(false); // 🔥
+        msg.setSeen(false);
 
         return messageRepo.save(msg);
     }
 
-    // 🔥 TYPING
+    // ✅ TYPING
     @MessageMapping("/typing/{roomId}")
     @SendTo("/topic/typing/{roomId}")
     public String typing(@DestinationVariable String roomId,
@@ -148,53 +154,83 @@ public class chatController {
         return username;
     }
 
-    // 🔥 USERS JOIN
+    // ✅ USERS JOIN
     @MessageMapping("/join/{roomId}")
     @SendTo("/topic/users/{roomId}")
     public Set<String> join(@DestinationVariable String roomId,
                             @Payload String username) {
-
         roomUsers.putIfAbsent(roomId, new HashSet<>());
         roomUsers.get(roomId).add(username);
-
         return roomUsers.get(roomId);
     }
 
-    // 🔥 USERS LEAVE
+    // ✅ USERS LEAVE
     @MessageMapping("/leave/{roomId}")
     @SendTo("/topic/users/{roomId}")
     public Set<String> leave(@DestinationVariable String roomId,
                              @Payload String username) {
-
         if (roomUsers.containsKey(roomId)) {
             roomUsers.get(roomId).remove(username);
         }
-
         return roomUsers.getOrDefault(roomId, new HashSet<>());
     }
 
-    // 🔥 READ RECEIPT
+    // ✅ READ RECEIPT
     @MessageMapping("/seen/{roomId}")
     @SendTo("/topic/seen/{roomId}")
     public String markSeen(@DestinationVariable String roomId,
                            @Payload String messageId) {
-
         Optional<message> msg = messageRepo.findById(messageId);
-
         if (msg.isPresent()) {
             msg.get().setSeen(true);
             messageRepo.save(msg.get());
         }
-
         return messageId;
     }
 
-    // 🔥 PRIVATE MESSAGE
+    // ✅ PRIVATE MESSAGE
     @MessageMapping("/private")
     @SendTo("/topic/private")
     public message privateMessage(@Payload message msg) {
         msg.setTimestamp(LocalDateTime.now());
         msg.setSeen(false);
+        return messageRepo.save(msg);
+    }
+
+    // ✅ NEW: REACT TO MESSAGE
+    // Frontend sends: { messageId, emoji, username }
+    // Backend toggles the reaction (add if not present, remove if already reacted)
+    // Broadcasts the updated message back to the room
+    @MessageMapping("/react/{roomId}")
+    @SendTo("/topic/reactions/{roomId}")
+    public message reactToMessage(
+            @DestinationVariable String roomId,
+            @Payload ReactionRequest request
+    ) {
+        Optional<message> optional = messageRepo.findById(request.getMessageId());
+        if (optional.isEmpty()) return null;
+
+        message msg = optional.get();
+        Map<String, Set<String>> reactions = msg.getReactions();
+        if (reactions == null) {
+            reactions = new java.util.HashMap<>();
+        }
+
+        String emoji = request.getEmoji();
+        String username = request.getUsername();
+
+        reactions.putIfAbsent(emoji, new HashSet<>());
+        Set<String> users = reactions.get(emoji);
+
+        // Toggle: remove if already reacted, add if not
+        if (users.contains(username)) {
+            users.remove(username);
+            if (users.isEmpty()) reactions.remove(emoji);
+        } else {
+            users.add(username);
+        }
+
+        msg.setReactions(reactions);
         return messageRepo.save(msg);
     }
 }
